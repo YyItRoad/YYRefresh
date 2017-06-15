@@ -68,11 +68,21 @@ typedef NS_ENUM(NSInteger, YYRefreshSupport) {
 
 @property (nonatomic, assign) YYRefreshSupport refreshSupport;
 
+- (void)beginRefreshing;
+
 /**
- 设置空状态信息
+ 设置不同状态信息
  @param refreshState 状态
  @param stateModel 数据
  */
 - (void)setRefreshState:(YYRefreshState)refreshState customData:(YYRefreshStateModel *)stateModel;
+
+/**
+ 读取不同状态下的模型数据
+
+ @param refreshState 刷新状态
+ @return model
+ */
+- (YYRefreshStateModel *)refreshModelWithState:(YYRefreshState)refreshState;
 
 @end

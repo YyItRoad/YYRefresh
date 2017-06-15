@@ -1,7 +1,7 @@
 
+#import "UIScrollView+EmptyDataSet.h"
 #import "UIScrollView+YYRefresh.h"
 #import "MJRefresh.h"
-#import "UIScrollView+EmptyDataSet.h"
 #import <objc/runtime.h>
 
 @interface YYWeakObjectContainer : NSObject
@@ -12,19 +12,26 @@
 
 @end
 
-
 static char const * const kRefreshDelegate =    "refreshDelegate";
 static char const * const kRefreshState =       "refreshState";
 static char const * const kRefreshSupport =     "refreshSupport";
-static char const * const kRefreshStateModel =  "refreshStateModel";
+static char const * const kRefreshStateModels =  "refreshStateModels";
 
 @interface UIScrollView (__YYRefresh)<DZNEmptyDataSetSource,DZNEmptyDataSetDelegate>
 
-@property (nonatomic, strong) YYRefreshStateModel *stateModel;
+@property (nonatomic, strong) NSMutableDictionary *stateModels;
 
 @end
 
 @implementation UIScrollView (YYRefresh)
+
+- (void)beginRefreshing {
+    [self mj_refresh];
+}
+
+- (YYRefreshStateModel *)refreshModelWithState:(YYRefreshState)refreshState {
+    return (YYRefreshStateModel *)self.stateModels[@(refreshState).stringValue];
+}
 
 - (void)setRefreshState:(YYRefreshState)refreshState {
     [self setRefreshState:refreshState customData:nil];
@@ -34,12 +41,11 @@ static char const * const kRefreshStateModel =  "refreshStateModel";
     if (!stateModel) {
         stateModel = [YYRefreshStateModel defaultModelWithState:refreshState];
     }
-    self.stateModel = stateModel;
+    self.stateModels[@(refreshState).stringValue] = stateModel;
     objc_setAssociatedObject(self, kRefreshState, @(refreshState), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [self.mj_header endRefreshing];
     [self.mj_footer endRefreshing];
 }
-
 
 - (YYRefreshState)refreshState {
     return (YYRefreshState)[objc_getAssociatedObject(self, kRefreshState) integerValue];
@@ -54,15 +60,15 @@ static char const * const kRefreshStateModel =  "refreshStateModel";
 }
 
 - (NSAttributedString *)titleForEmptyDataSet:(UIScrollView *)scrollView {
-    return self.stateModel.title;
+    return [(YYRefreshStateModel *)self.stateModels[@(self.refreshState).stringValue] title];
 }
 
 - (NSAttributedString *)descriptionForEmptyDataSet:(UIScrollView *)scrollView {
-    return self.stateModel.desc;
+    return [(YYRefreshStateModel *)self.stateModels[@(self.refreshState).stringValue] desc];
 }
 
 - (UIImage *)imageForEmptyDataSet:(UIScrollView *)scrollView {
-    return self.stateModel.image;
+    return [(YYRefreshStateModel *)self.stateModels[@(self.refreshState).stringValue] image];
 }
 
 - (BOOL)emptyDataSetShouldAllowScroll:(UIScrollView *)scrollView{
@@ -96,6 +102,7 @@ static char const * const kRefreshStateModel =  "refreshStateModel";
     }else{
         self.mj_footer = [MJRefreshAutoNormalFooter footerWithRefreshingTarget:self refreshingAction:@selector(mj_loadMore)];
     }
+    self.mj_footer.automaticallyHidden = YES;
 }
 
 - (void)mj_loadMore {
@@ -112,12 +119,17 @@ static char const * const kRefreshStateModel =  "refreshStateModel";
 
 #pragma mark - set/get
 
-- (void)setStateModel:(YYRefreshStateModel *)stateModel {
-    objc_setAssociatedObject(self, kRefreshStateModel, stateModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+- (void)setStateModels:(NSMutableDictionary *)stateModels {
+    objc_setAssociatedObject(self, kRefreshStateModels, stateModels, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-- (YYRefreshStateModel *)stateModel {
-    return objc_getAssociatedObject(self, kRefreshStateModel);
+- (NSMutableDictionary *)stateModels {
+    NSMutableDictionary *dict = objc_getAssociatedObject(self, kRefreshStateModels);
+    if (!dict) {
+        dict = @{}.mutableCopy;
+        objc_setAssociatedObject(self, kRefreshStateModels, dict, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return dict;
 }
 
 - (void)setRefreshSupport:(YYRefreshSupport)refreshSupport {
@@ -165,11 +177,12 @@ static char const * const kRefreshStateModel =  "refreshStateModel";
 - (void)setRefreshDelegate:(id<YYRefreshDelegate>)refreshDelegate {
     if (refreshDelegate) {
         objc_setAssociatedObject(self, kRefreshDelegate, [[YYWeakObjectContainer alloc] initWithWeakObject:refreshDelegate], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
         class_addProtocol([self class],objc_getProtocol([@"DZNEmptyDataSetSource" UTF8String]));
-        class_addProtocol([self class],objc_getProtocol([@"DZNEmptyDataSetDelegate" UTF8String]));
+
         self.emptyDataSetSource = self;
         self.emptyDataSetDelegate = self;
-        self.refreshSupport = YYRefreshSupportRefresh;
+        self.refreshSupport = YYRefreshSupportAll;
         self.refreshState = YYRefreshLoading;
     }
 }
